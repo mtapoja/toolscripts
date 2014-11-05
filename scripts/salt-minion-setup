@@ -1,0 +1,100 @@
+#!/bin/bash
+
+#  salt-minion-setup - configure Salt minion master
+#  Copyright (c)  2014  Mika Tapojärvi <mika.tapojarvi@embelin.fi>.
+#
+#  Distributed under the MIT License, see file LICENSE.
+#
+#  This file is part of toolscripts. 
+
+shortusage()
+{
+    echo "Salt minion configuration."
+    echo "usage: `basename $0` [ <no params> | -h | -i <ip> | -v ]"
+    echo "       `basename $0` [ --help ]"
+    echo "       `basename $0` [ --version ]"
+}
+
+
+usage()
+{
+    echo -e "\n\n"
+    echo "  <no parameters>            Display short usage."
+    echo "  -h   --help                This help text."
+    echo "  -i <ip>                    Set Salt master IP address and restart minion"
+    echo "  -v   --version             Display script version."
+    echo -e "\n  Example: `basename $0` -i 82.23.1.18"
+}
+
+
+show_version()
+{
+    echo "`basename $0` version 0.1 - development"
+}
+
+
+##################################################################################
+#      main of salt-minion-setup                                                 #
+##################################################################################
+
+if [[ "$1" == "" ]];
+then
+    shortusage
+    exit 0
+fi
+
+
+#
+# Clear variables
+IPADDRESS=""
+MINIONCONF=/etc/salt/minion
+
+while getopts 'hi:v-:-' opt;
+do
+    case $opt in
+    h)  shortusage; usage;;
+    i)  IPADDRESS="${OPTARG}";;
+    v)  show_version; exit 0;;
+    -)
+        case "${OPTARG}" in
+            help)
+                shortusage
+                usage
+                exit 0
+                ;;
+
+            version)
+                show_version
+                exit 0
+                ;;
+
+            *)
+                echo "Unknown option"
+                ;;
+        esac
+    esac
+done
+shift $((OPTIND - 1));
+
+if [ -n "$IPADDRESS" ];
+then
+    if [ -f $MINIONCONF ];
+    then
+        echo "Current master IP for this minion:"
+        grep master: $MINIONCONF
+
+        if [ "$USER" == "root" ];
+        then
+            echo "Changing it to: master: $IPADDRESS."
+            sed -i "s/.*master:.*/master: $IPADDRESS/" $MINIONCONF
+
+            echo "Restarting salt-minion:"
+            service salt-minion restart
+        else
+            echo -e "\nYou should become root to be able to change this."
+        fi
+        #echo "minion conf: $MINIONCONF"
+    else
+        echo "minion config file not found at $MINIONCONF!"
+    fi
+fi
