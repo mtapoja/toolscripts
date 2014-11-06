@@ -5,7 +5,7 @@
 #
 #  Distributed under the MIT License, see file LICENSE.
 #
-#  This file is part of toolscripts. 
+#  This file is part of toolscripts.
 
 shortusage()
 {
@@ -29,7 +29,7 @@ usage()
 
 show_version()
 {
-    echo "`basename $0` version 0.1 - development"
+    echo "`basename $0` version 0.1"
 }
 
 
@@ -76,25 +76,35 @@ do
 done
 shift $((OPTIND - 1));
 
-if [ -n "$IPADDRESS" ];
+
+if [ -f $MINIONCONF ];
 then
-    if [ -f $MINIONCONF ];
+    echo "Current Salt master IP/domain configuration for this minion:"
+    grep master: $MINIONCONF
+else
+    echo "Minion config file not found at $MINIONCONF!"
+
+    dpkg -l salt-minion > /dev/null 2> /dev/null
+    if [ $? -eq 1 ];
     then
-        echo "Current master IP for this minion:"
-        grep master: $MINIONCONF
-
-        if [ "$USER" == "root" ];
-        then
-            echo "Changing it to: master: $IPADDRESS."
-            sed -i "s/.*master:.*/master: $IPADDRESS/" $MINIONCONF
-
-            echo "Restarting salt-minion:"
-            service salt-minion restart
-        else
-            echo -e "\nYou should become root to be able to change this."
-        fi
-        #echo "minion conf: $MINIONCONF"
-    else
-        echo "minion config file not found at $MINIONCONF!"
+        echo "salt-minion package is missing! Install it first."
+        exit 1
     fi
+fi
+
+if [ -z "$IPADDRESS" ];
+then
+    echo "IP address/domain missing!"
+fi
+
+if [ "$USER" == "root" ];
+then
+    echo "Changing it to: master: $IPADDRESS."
+    sed -i "s/.*master:.*/master: $IPADDRESS/" $MINIONCONF
+
+    echo "Restarting salt-minion:"
+    service salt-minion restart
+else
+    echo -e "\nYou should become root to be able to change this."
+    exit 2
 fi
