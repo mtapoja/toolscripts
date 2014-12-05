@@ -52,7 +52,7 @@ MINIONCONF=/etc/salt/minion
 while getopts 'hi:v-:-' opt;
 do
     case $opt in
-    h)  shortusage; usage;;
+    h)  shortusage; usage; exit 0;;
     i)  IPADDRESS="${OPTARG}";;
     v)  show_version; exit 0;;
     -)
@@ -95,16 +95,19 @@ fi
 if [ -z "$IPADDRESS" ];
 then
     echo "IP address/domain missing!"
-fi
-
-if [ "$USER" == "root" ];
-then
-    echo "Changing it to: master: $IPADDRESS."
-    sed -i "s/.*master:.*/master: $IPADDRESS/" $MINIONCONF
-
-    echo "Restarting salt-minion:"
-    service salt-minion restart
 else
-    echo -e "\nYou should become root to be able to change this, you are now [$USER]."
-    exit 2
+    if [ `id -u` -eq 0 ];
+    then
+        echo "Changing it to: master: $IPADDRESS."
+        sed -i "s/.*master:.*/master: $IPADDRESS/" $MINIONCONF
+
+        echo "Restarting salt-minion:"
+        service salt-minion restart
+    else
+        echo -e "\nYou should become root to be able to change this."
+        echo "You currently have:"
+        echo "- \$USER: $USER"
+        echo "- id -u: `id -u`"
+        exit 2
+    fi
 fi
