@@ -105,6 +105,6 @@ then
     echo "Restarting salt-minion:"
     service salt-minion restart
 else
-    echo -e "\nYou should become root to be able to change this."
+    echo -e "\nYou should become root to be able to change this, you are now [$USER]."
     exit 2
 fi
