@@ -1,0 +1,181 @@
+#!/bin/bash
+
+#  salt-minion-configurator - configure Salt minion, set pillars and network settings
+#  Copyright (c)  2015  Mika Tapojärvi <mika.tapojarvi@embelin.fi>.
+#
+#  Distributed under the MIT License, see file LICENSE.
+#
+#  This file is part of toolscripts.
+
+shortusage()
+{
+    echo "Salt minion configurator"
+    echo "usage: `basename $0` [ <no params> | -h | -m <minion id> | -p <pillars> | -s <states> | -t <p. templ.> | -v ]"
+    echo "       `basename $0` [ --help ]"
+    echo "       `basename $0` [ --version ]"
+}
+
+
+usage()
+{
+    echo -e "\n\n"
+    echo "  <no parameters>            Display short usage."
+    echo "  -h   --help                This help text."
+    echo "  -m <minion id>             Minion id, visible with salt-key -L."
+    echo "  -p <pillars>               Path to pillars."
+    echo "  -s <states>                Path to states."
+    echo "  -t <pillar template>       Path to pillar template file."
+    echo "  -v   --version             Display script version."
+    echo -e "\n  Example: (usually ran with 'sudo'):"
+    echo -e "      sudo `basename $0` -m newwebserver"
+    echo -e "      sudo `basename $0` -m newwebserver"
+}
+
+
+show_version()
+{
+    echo "`basename $0` version 0.1"
+}
+
+
+check_parameters()
+{
+    #minionid=""
+    if [[ "$pillarpath" != "" ]];
+    then
+        if [ ! -d $pillarpath ];
+        then
+            echo "$pillarpath does not seem to point to a proper directory. Exiting..."
+            exit 2
+        fi
+    fi
+
+    if [[ "$statepath" != "" ]];
+    then
+        if [ ! -d $statepath ];
+        then
+            echo "$statepath does not seem to point to a proper directory. Exiting..."
+            exit 2
+        fi
+    fi
+
+    if [[ "$pillartemplate" != "" ]];
+    then
+        if [ ! -f $pillartemplate ];
+        then
+            echo "$pillartemplate does not seem to point to a proper pillar template file. Exiting..."
+            exit 2
+        fi
+    fi
+
+}
+
+
+get_minionid_to_process()
+{
+    # If minionid is empty, there was no parameter given.
+    # Check salt-keys for new minions.
+    if [[ "$minionid" == "" ]];
+    then
+        local tmpsaltkeys=`mktemp /tmp/tmpsaltkeys.XXXX`
+        salt-key -L | \
+            sed -n '/Unaccepted Keys:/,/Rejected Keys:/p' | \
+            grep -v -e "Unaccepted Keys:" -e "Rejected Keys:" > $tmpsaltkeys
+        if [ `cat $tmpsaltkeys | wc -l` -gt 1 ];
+        then
+            local firstminion=""
+
+            echo "Which Salt minion should be configured?"
+
+            while read asaltkey;
+            do
+                echo "- $asaltkey"
+                if [[ "$firstminion" == "" ]];
+                then
+                    firstminion=$asaltkey
+                fi
+            done < $tmpsaltkeys
+
+            read -p "Give a minion id: " minionid
+
+            grep -qw $minionid $tmpsaltkeys > /dev/null 2> /dev/null
+            if [ $? -eq 0 ];
+            then
+                echo "given minionid: [$minionid] ok "
+            else
+                if [[ "$minionid" != "" ]];
+                then
+                    echo "given minionid: [$minionid] nok "
+                fi
+            fi
+        else
+            echo "1 or smaller - not implemented yet"
+        fi
+
+        rm -f $tmpsaltkeys
+    fi
+}
+
+##################################################################################
+#      main of salt-minion-configurator                                          #
+##################################################################################
+
+# Temporarily disabled
+#if [[ "$1" == "" ]];
+#then
+#    shortusage
+#    exit 0
+#fi
+
+
+#
+# Clear variables
+minionid=""
+pillarpath=""
+statepath=""
+pillartemplate=""
+
+while getopts 'hm:p:s:t:v-:-' opt;
+do
+    case $opt in
+    h)  shortusage; usage; exit 0;;
+    m)  minionid="${OPTARG}";;
+    p)  pillarpath="${OPTARG}";;
+    s)  statepath="${OPTARG}";;
+    t)  pillartemplate="${OPTARG}";;
+    v)  show_version; exit 0;;
+    -)
+        case "${OPTARG}" in
+            help)
+                shortusage
+                usage
+                exit 0
+                ;;
+
+            version)
+                show_version
+                exit 0
+                ;;
+
+            *)
+                echo "Unknown option"
+                ;;
+        esac
+    esac
+done
+shift $((OPTIND - 1));
+
+
+# Was the script ran with 'sudo'?
+if [ ! `id -u` -eq 0 ];
+then
+    echo -e "\nYou should become root to be able to read Salt keys."
+    echo "You currently have:"
+    echo "- \$USER: $USER"
+    echo "- id -u: `id -u`"
+    exit 2
+fi
+
+check_parameters
+get_minionid_to_process
+
