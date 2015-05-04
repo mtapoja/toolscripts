@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #  salt-minion-setup - configure Salt minion master
-#  Copyright (c)  2014  Mika Tapojärvi <mika.tapojarvi@embelin.fi>.
+#  Copyright (c)  2014 - 2015  Mika Tapojärvi <mika.tapojarvi@embelin.fi>.
 #
 #  Distributed under the MIT License, see file LICENSE.
 #
@@ -10,7 +10,7 @@
 shortusage()
 {
     echo "Salt minion configuration."
-    echo "usage: `basename $0` [ <no params> | -h | -i <ip> | -v ]"
+    echo "usage: `basename $0` [ <no params> | -h | -i <ip> | -m <id> | -v ]"
     echo "       `basename $0` [ --help ]"
     echo "       `basename $0` [ --version ]"
 }
@@ -21,15 +21,16 @@ usage()
     echo -e "\n\n"
     echo "  <no parameters>            Display short usage."
     echo "  -h   --help                This help text."
-    echo "  -i <ip>                    Set Salt master IP address and restart minion"
+    echo "  -i <ip>                    Set Salt master IP address and restart minion."
+    echo "  -m <id>                    Set Salt minion id string."
     echo "  -v   --version             Display script version."
-    echo -e "\n  Example: `basename $0` -i 82.23.1.18"
+    echo -e "\n  Example: `basename $0` -i 82.23.1.18 -m `hostname`"
 }
 
 
 show_version()
 {
-    echo "`basename $0` version 0.1"
+    echo "`basename $0` version 0.2"
 }
 
 
@@ -47,13 +48,15 @@ fi
 #
 # Clear variables
 IPADDRESS=""
+MINIONID=""
 MINIONCONF=/etc/salt/minion
 
-while getopts 'hi:v-:-' opt;
+while getopts 'hi:m:v-:-' opt;
 do
     case $opt in
     h)  shortusage; usage; exit 0;;
     i)  IPADDRESS="${OPTARG}";;
+    m)  MINIONID="${OPTARG}";;
     v)  show_version; exit 0;;
     -)
         case "${OPTARG}" in
@@ -81,6 +84,8 @@ if [ -f $MINIONCONF ];
 then
     echo "Current Salt master IP/domain configuration for this minion:"
     grep master: $MINIONCONF
+    echo "Current Salt minion id:"
+    grep id: $MINIONCONF
 else
     echo "Minion config file not found at $MINIONCONF!"
 
@@ -91,6 +96,12 @@ else
         exit 1
     fi
 fi
+
+if [ ! -z "$MINIONID" ];
+then
+
+fi
+
 
 if [ -z "$IPADDRESS" ];
 then
