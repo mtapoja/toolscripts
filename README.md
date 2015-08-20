@@ -1,7 +1,7 @@
 toolscripts
 ===========
 
-Copyright (c)  2014  Mika Tapojärvi <mika.tapojarvi@embelin.fi>.
+Copyright (c)  2014 - 2015  Mika Tapojärvi <mika.tapojarvi@embelin.fi>.
 
 Distributed under the MIT License, see file LICENSE.
 

@@ -30,7 +30,7 @@ usage()
 
 show_version()
 {
-    echo "`basename $0` version 0.2"
+    echo "`basename $0` version 0.3"
 }
 
 
@@ -50,6 +50,10 @@ fi
 IPADDRESS=""
 MINIONID=""
 MINIONCONF=/etc/salt/minion
+MINIONIDFILE=/etc/salt/minion_id
+MASTEREXISTS=0
+MINIONIDEXISTS=0
+
 
 while getopts 'hi:m:v-:-' opt;
 do
@@ -83,9 +87,33 @@ shift $((OPTIND - 1));
 if [ -f $MINIONCONF ];
 then
     echo "Current Salt master IP/domain configuration for this minion:"
-    grep master: $MINIONCONF
+    grep ^master: $MINIONCONF
+    if [ $? -eq 1 ];
+    then
+        echo -e "\nNO MASTER SET!!\n"
+    else
+        MASTEREXISTS=1
+
+        # If configuration was done with old version of salt-minion-setup,
+        # it might be that there are accidentally more than one lines of
+        # master configurations... The first one is in right place, two
+        # others can be cleaned.
+        AMOUNT=`grep ^master: $MINIONCONF | wc -l`
+        if [ $AMOUNT -gt 1 ];
+        then
+            sed -i '0,/^master:/! s/^master:.*//' $MINIONCONF
+        fi
+
+    fi
+
     echo "Current Salt minion id:"
-    grep id: $MINIONCONF
+    grep ^id: $MINIONCONF
+    if [ $? -eq 1 ];
+    then
+        echo -e "\nNO ID SET!!\n"
+    else
+        MINIONIDEXISTS=1
+    fi
 else
     echo "Minion config file not found at $MINIONCONF!"
 
@@ -97,28 +125,45 @@ else
     fi
 fi
 
-if [ ! -z "$MINIONID" ];
+if [ `id -u` -eq 0 ];
 then
-
-fi
-
-
-if [ -z "$IPADDRESS" ];
-then
-    echo "IP address/domain missing!"
-else
-    if [ `id -u` -eq 0 ];
+    if [ -z "$IPADDRESS" ];
     then
-        echo "Changing it to: master: $IPADDRESS."
-        sed -i "s/.*master:.*/master: $IPADDRESS/" $MINIONCONF
-
-        echo "Restarting salt-minion:"
-        service salt-minion restart
+        echo "IP address/domain missing!"
     else
-        echo -e "\nYou should become root to be able to change this."
-        echo "You currently have:"
-        echo "- \$USER: $USER"
-        echo "- id -u: `id -u`"
-        exit 2
+        echo "Changing Salt master to: $IPADDRESS."
+        if [ $MASTEREXISTS -eq 0 ];
+        then
+            sed -i "s/#master:.*/master: $IPADDRESS/" $MINIONCONF
+        else
+            sed -i "s/^master:.*/master: $IPADDRESS/" $MINIONCONF
+        fi
     fi
+
+    if [ ! -z "$MINIONID" ];
+    then
+        echo "Changing minion id to: $MINIONID"
+        if [ $MINIONIDEXISTS -eq 0 ];
+        then
+            sed -i "s/#id:.*/id: $MINIONID/" $MINIONCONF
+        else
+            sed -i "s/^id:.*/id: $MINIONID/" $MINIONCONF
+        fi
+
+        # If Salt has minion_id file, change that too.
+        if [ -f $MINIONIDFILE ];
+        then
+            echo "$MINIONID" > $MINIONIDFILE
+        fi
+    fi
+
+
+    echo "Restarting salt-minion:"
+    service salt-minion restart
+else
+    echo -e "\nYou should become root to be able to change this."
+    echo "You currently have:"
+    echo "- \$USER: $USER"
+    echo "- id -u: `id -u`"
+    exit 2
 fi
