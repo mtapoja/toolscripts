@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #  salt-minion-setup - configure Salt minion master
-#  Copyright (c)  2014 - 2015  Mika Tapojärvi <mika.tapojarvi@embelin.fi>.
+#  Copyright (c)  2014 - 2016  Mika Tapojärvi <mika.tapojarvi@embelin.fi>.
 #
 #  Distributed under the MIT License, see file LICENSE.
 #
@@ -10,7 +10,7 @@
 shortusage()
 {
     echo "Salt minion configuration."
-    echo "usage: `basename $0` [ <no params> | -h | -i <ip> | -m <id> | -v ]"
+    echo "usage: `basename $0` [ <no params> | -h | -i '<ip1> <ip2>..'  | -m <id> | -v ]"
     echo "       `basename $0` [ --help ]"
     echo "       `basename $0` [ --version ]"
 }
@@ -21,7 +21,8 @@ usage()
     echo -e "\n\n"
     echo "  <no parameters>            Display short usage."
     echo "  -h   --help                This help text."
-    echo "  -i <ip>                    Set Salt master IP address and restart minion."
+    echo "  -i '<ip1> <ip2>..'         Set Salt master IP address and restart minion."
+    echo "                             More than one IP mean Multimaster setup."
     echo "  -m <id>                    Set Salt minion id string."
     echo "  -v   --version             Display script version."
     echo -e "\n  Example: `basename $0` -i 82.23.1.18 -m `hostname`"
@@ -30,7 +31,7 @@ usage()
 
 show_version()
 {
-    echo "`basename $0` version 0.3"
+    echo "`basename $0` version 0.4"
 }
 
 
@@ -47,7 +48,7 @@ fi
 
 #
 # Clear variables
-IPADDRESS=""
+IPADDRESSES=""
 MINIONID=""
 MINIONCONF=/etc/salt/minion
 MINIONIDFILE=/etc/salt/minion_id
@@ -59,7 +60,7 @@ while getopts 'hi:m:v-:-' opt;
 do
     case $opt in
     h)  shortusage; usage; exit 0;;
-    i)  IPADDRESS="${OPTARG}";;
+    i)  IPADDRESSES="${OPTARG}";;
     m)  MINIONID="${OPTARG}";;
     v)  show_version; exit 0;;
     -)
@@ -87,12 +88,14 @@ shift $((OPTIND - 1));
 if [ -f $MINIONCONF ];
 then
     echo "Current Salt master IP/domain configuration for this minion:"
-    grep ^master: $MINIONCONF
-    if [ $? -eq 1 ];
+    MASTERLINES=`sed -n '/^master:/,/^ *$/p' $MINIONCONF| wc -l`
+    if [ $MASTERLINES -eq 0 ];
     then
         echo -e "\nNO MASTER SET!!\n"
     else
         MASTEREXISTS=1
+        # Print current Salt master setup.
+        sed -n '/^master:/,/^ *$/p' $MINIONCONF
 
         # If configuration was done with old version of salt-minion-setup,
         # it might be that there are accidentally more than one lines of
@@ -127,18 +130,37 @@ fi
 
 if [ `id -u` -eq 0 ];
 then
-    if [ -z "$IPADDRESS" ];
+    if [ -z "$IPADDRESSES" ];
     then
         echo "IP address/domain missing!"
     else
-        echo "Changing Salt master to: $IPADDRESS."
+        echo "Changing Salt master IP address to: ${IPADDRESSES}."
+
+        IPADDRESSESWITHLBS="master:\n"
+        for ANIP in ${IPADDRESSES}
+        do
+            IPADDRESSESWITHLBS="$IPADDRESSESWITHLBS  - $ANIP\n"
+        done
+
+
         if [ $MASTEREXISTS -eq 0 ];
         then
-            sed -i "s/#master:.*/master: $IPADDRESS/" $MINIONCONF
+            echo "master does not exist, add ips..."
+            sed -i "s/^#master:.*/$IPADDRESSESWITHLBS/" $MINIONCONF
         else
-            sed -i "s/^master:.*/master: $IPADDRESS/" $MINIONCONF
+            echo "master exists, add ips..."
+
+            # Trick:
+            # 1) add SETNEWMASTERCONFIGHERE above the current master IP configuration
+            # 2) remove current master IP configuration
+            # 3) replace SETNEWMASTERCONFIGHERE with new master IP configuration
+            sed -i -e '/^master:/,/^ *$/ {s/^master:/SETNEWMASTERCONFIGHERE\n&/}' $MINIONCONF
+            sed -i '/^master:/,/^ *$/d' $MINIONCONF
+            sed -i "s/SETNEWMASTERCONFIGHERE.*/$IPADDRESSESWITHLBS/" $MINIONCONF
         fi
     fi
+
+    echo "Minion ID: [$MINIONID]"
 
     if [ ! -z "$MINIONID" ];
     then
@@ -156,7 +178,6 @@ then
             echo "$MINIONID" > $MINIONIDFILE
         fi
     fi
-
 
     echo "Restarting salt-minion:"
     service salt-minion restart
